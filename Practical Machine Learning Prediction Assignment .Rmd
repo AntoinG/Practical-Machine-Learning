@@ -1,0 +1,120 @@
+---
+title: "Practical Machine Learning Project Assignment Writeup"
+author: "Antoin van Gemert"
+date: "14 maart 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Introduction
+## Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+## One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+## The goal of this excercise is to apply the machine learning algoritm available in the test data below.
+# Data
+## The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+## The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+## The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+# Loading packages:
+
+```{r}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(corrplot)
+set.seed(12345)
+```
+
+# 1. Data Loading
+## Two data sets will be loaded,
+## 1. The Training data set,on which te prediction model will be fitted
+## 2. The Testing data set, that is going to be predicted.
+### The Test data set will not be altered and only used for predicting purposes.
+```{r}
+UrlTrain <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+UrlTest  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(url(UrlTrain))
+testing  <- read.csv(url(UrlTest))
+dim(training); dim(testing)
+```
+
+# 2. Data Cleansing
+## The data cleansing steps in this phase are:
+### 1. Removing NZV (Near Zero variance) variables
+### 2. Removing variables containing mostly NA's
+### 3. Removing idintification only variables (columns 1 to 5)
+
+## 1. Removing NZV (Near Zero variance) variables
+```{r}
+NZV <- nearZeroVar(training)
+training <- training[, -NZV]
+dim(training)
+```
+
+## 2. Removing variables containing mostly NA's
+```{r}
+AllNA    <- sapply(training, function(x) mean(is.na(x))) > 0.95
+training <- training[, AllNA==FALSE]
+dim(training)
+```
+
+## 3. Removing identification only variables (columns 1 to 5)
+```{r}
+training <- training[, -(1:5)]
+dim(training)
+```
+
+# 3. Partitioning the traing data in a trainig set (70%) and a test set (30%) for validation of the prediction model
+```{r}
+inTrain  <- createDataPartition(training$classe, p=0.7, list=FALSE)
+TrainSet <- training[inTrain, ]
+TestSet  <- training[-inTrain, ]
+dim(TrainSet); dim(TestSet)
+```
+# Building the prediction model
+## Following models are used for this prediction assignment
+### 1. Decision Tree
+### 2. Random Forrest
+
+## 1. Decision Tree
+```{r}
+DecTree <- rpart(classe ~ ., data=training, method="class")
+fancyRpartPlot(DecTree)
+```
+
+## Evaluating the Decision Tree Model
+```{r}
+predictDecTree <- predict(DecTree, newdata=TestSet, type="class")
+confMatDecTree <- confusionMatrix(predictDecTree, TestSet$classe)
+confMatDecTree
+```
+
+## 2. Random Forrest
+```{r}
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modFitRandForest <- train(classe ~ ., data = training, method="rf",
+                          trControl=controlRF)
+modFitRandForest$finalModel
+```
+
+## Evaluating the Random Forrest Model
+```{r}
+predictRandForest <- predict(modFitRandForest, newdata=TestSet)
+confMatRandForest <- confusionMatrix(predictRandForest, TestSet$classe)
+confMatRandForest
+```
+
+### Accurancy of the used models is:
+### The Random Forrest model performs better that the Decision Tree and will be applied for the prediction
+
+# 4. Applying Random Forrest to the test data set
+
+```{r}
+predictTest <- predict(modFitRandForest, newdata = testing)
+print(as.data.frame(predictTest))
+```
